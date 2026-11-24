@@ -259,6 +259,14 @@ input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width
  .filters .frow{margin-top:8px}
 }
 @media print{.topbar,.band,header,.filters,.heroband,.how,.grid,.bar,footer,.ov,.drawer,.noprint{display:none!important}.modal{position:static;transform:none;width:100%;max-height:none;display:block}.page{display:none!important}}
+@media print{
+ html.lock,html.lock body,body.lock{position:static!important;top:auto!important;overflow:visible!important;height:auto!important}
+ .topbar,header,main,footer,.bar,.ov,.drawer,.toast,.noprint{display:none!important}
+ .modal,.modal.on{position:static!important;transform:none!important;width:100%!important;max-height:none!important;overflow:visible!important;display:block!important;box-shadow:none!important;border-radius:0!important}
+ .modal>.mb{overflow:visible!important;max-height:none!important;padding:0!important}
+ .contract{border:0;padding:0}
+ @page{margin:14mm}
+}
 </style>
 </head>
 <body>
@@ -463,6 +471,7 @@ function search(q){
 /* ---------- état ---------- */
 let state={q:'',u:'all',cat:'',grp:null,cart:{},out:'',back:''};
 try{const s=JSON.parse(localStorage.getItem('era-cart')||'null');if(s){state.cart=s.cart||{};state.out=s.out||'';state.back=s.back||'';}}catch(e){}
+if(!Object.keys(state.cart).length){state.out='';state.back='';}
 const save=()=>{try{localStorage.setItem('era-cart',JSON.stringify({cart:state.cart,out:state.out,back:state.back}))}catch(e){}};
 const byId=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
 const priceHtml=it=>it.price?`<div class="pr">${fmt(it.price)} <small>/ jour</small></div>`:`<div class="pr ask">Prix sur demande</div>`;
@@ -508,11 +517,12 @@ function renderCart(){
  if(!ids.length){$('#cartBody').innerHTML='<p style="color:var(--mut);padding:30px 0;text-align:center">Votre panier est vide.<br>Ajoutez des appareils pour commencer.</p>';$('#cartFoot').innerHTML='';return;}
  $('#cartBody').innerHTML=ids.map(i=>{const it=byId[i];return `<div class="li"><div class="t">${it.img?`<img src="${src(it.id)}" alt="">`:''}</div><div><b>${esc(it.name)}</b><small>${it.price?fmt(it.price)+' / jour':'Prix sur demande'}</small></div>
   <div class="qty"><button data-dec="${i}" aria-label="Moins">−</button><b>${state.cart[i]}</b><button data-inc="${i}" aria-label="Plus">+</button></div></div>`}).join('')+
-  `<div class="two" style="margin-top:6px"><div><label for="dout">Date de sortie</label><input type="date" id="dout" value="${state.out}"></div><div><label for="dback">Date de retour</label><input type="date" id="dback" value="${state.back}"></div></div>`;
+  `<div class="two" style="margin-top:6px"><div><label for="dout">Date de sortie</label><input type="date" id="dout" min="${today()}" value="${state.out}"></div><div><label for="dback">Date de retour</label><input type="date" id="dback" value="${state.back}"></div></div>`;
  const t=totals();
  $('#cartFoot').innerHTML=(t.d===-1?'<div class="note" style="margin:0">La date de retour doit être après la date de sortie.</div>':'')+
   `<div class="tot"><span>${t.d>0?'Total pour '+t.d+' jour'+(t.d>1?'s':''):'Total'}</span><span>${t.known&&t.d>0?fmt(t.perDay*t.d):t.known?fmt(t.perDay)+' / jour':'Sur devis'}</span></div>
-  <button class="btn red big" id="validate">Valider le panier</button>`;
+  <button class="btn red big" id="validate">Valider le panier</button>
+  <button class="btn" id="emptyCart">Vider le panier et les dates</button>`;
 }
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),1800);}
 let lockY=0;
@@ -543,6 +553,8 @@ function showTuto(id){const it=byId[id],v=TUTO[id];
  <div class="two" style="margin-top:14px"><button class="btn big" data-back="${id}">← Retour à l'appareil</button><a class="btn big" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=${v}">Ouvrir sur YouTube ↗</a></div></div>`);}
 
 /* ---------- validation du panier ---------- */
+const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
+function resetOrder(){state.cart={};state.out='';state.back='';save();renderCart();renderGrid()}
 function cartLines(){return Object.keys(state.cart).map(i=>`• ${state.cart[i]} × ${byId[i].name} (N° ${i})`).join('\n')}
 function waLink(text){return `https://wa.me/${WA}?text=${encodeURIComponent(text)}`}
 function datesLine(){const t=totals();return (state.out?`Sortie : ${frDate(state.out)}\n`:'')+(state.back?`Retour : ${frDate(state.back)}\n`:'')+(t.known&&t.d>0?`Total estimé : ${fmt(t.perDay*t.d)}\n`:'')}
@@ -555,14 +567,14 @@ function chooseMode(){
 function modeWa(){const txt=`Bonjour ERA-PROD, je souhaite louer :\n${cartLines()}\n${datesLine()}`;
  openModal(mh('Commander sur WhatsApp')+`<div class="mb"><p>Votre panier est prêt. Appuyez sur le bouton : WhatsApp s'ouvre avec votre message, il ne reste qu'à l'envoyer.</p>
  <pre style="white-space:pre-wrap;background:var(--soft);padding:12px;border-radius:10px;font:inherit;font-size:14px">${esc(txt)}</pre>
- <a class="btn wa big" target="_blank" rel="noopener" href="${waLink(txt)}">Ouvrir WhatsApp</a></div>`);}
+ <a class="btn wa big" data-sent target="_blank" rel="noopener" href="${waLink(txt)}">Ouvrir WhatsApp</a></div>`);}
 let form={mode:'',idImg:'',faceImg:''};
 function modeForm(mode){form.mode=mode;form.idImg='';form.faceImg='';
  const liv=mode==='liv';
  openModal(mh(liv?'Me faire livrer':'Réserver pour une date')+`<form class="mb" id="rf">
   <div class="two"><div><label for="fn">Nom</label><input id="fn" type="text" required autocomplete="family-name"></div><div><label for="fp">Prénoms</label><input id="fp" type="text" required autocomplete="given-name"></div></div>
   <label for="ft">Numéro de téléphone</label><input id="ft" type="tel" required inputmode="tel" placeholder="07 00 00 00 00" autocomplete="tel">
-  <div class="two"><div><label for="fo">Date de sortie</label><input id="fo" type="date" required value="${state.out}"></div><div><label for="fb">Date de retour</label><input id="fb" type="date" required value="${state.back}"></div></div>
+  <div class="two"><div><label for="fo">Date de sortie</label><input id="fo" type="date" required min="${today()}" value="${state.out}"></div><div><label for="fb">Date de retour</label><input id="fb" type="date" required min="${today()}" value="${state.back}"></div></div>
   ${liv?`<label for="fa">Adresse de livraison (commune, quartier, repère)</label><textarea id="fa" rows="2" required></textarea>
   <div class="two" style="margin-top:12px"><div class="up"><b>📄 Photo de votre pièce d'identité</b><input type="file" accept="image/*" capture="environment" id="fid" required><div id="pid"></div></div>
   <div class="up"><b>🙂 Photo de votre visage</b><input type="file" accept="image/*" capture="user" id="fface" required><div id="pface"></div></div></div>
@@ -600,13 +612,15 @@ function makeContract(f){
  <div class="noprint" style="display:grid;gap:10px;margin-top:14px">
   <a class="btn wa big" target="_blank" rel="noopener" href="${waLink(txt)}">Envoyer ma demande à ERA-PROD (WhatsApp)</a>
   ${liv?'<div class="note" style="margin:0">Dans WhatsApp, envoyez aussi <b>la photo de votre pièce</b> et <b>la photo de votre visage</b>. ERA-PROD valide ensuite votre livraison.</div>':''}
-  <div class="two"><button class="btn" id="printC">Imprimer / PDF</button><button class="btn" id="copyC">Copier le contrat</button></div>
+  <div class="two"><button class="btn" id="printC">Enregistrer en PDF</button><button class="btn" id="copyC">Copier le contrat</button></div>
+  <p class="tnote" style="margin:0">Pour le PDF : dans la fenêtre qui s'ouvre, choisissez « Enregistrer au format PDF ».</p>
  </div></div>`,true);
+ resetOrder();
 }
 
 /* ---------- événements ---------- */
 document.addEventListener('click',e=>{
- const t=e.target.closest('[data-tuto],[data-back],[data-reset],[data-g],[data-u],[data-more],[data-add],[data-inc],[data-dec],[data-close],[data-mode],[data-s],#cartBtn,#barBtn,#validate,#ov,#printC,#copyC');
+ const t=e.target.closest('[data-sent],#emptyCart,[data-tuto],[data-back],[data-reset],[data-g],[data-u],[data-more],[data-add],[data-inc],[data-dec],[data-close],[data-mode],[data-s],#cartBtn,#barBtn,#validate,#ov,#printC,#copyC');
  if(!t)return;
  if(t.tagName==='A'&&(t.dataset.u||t.dataset.g!==undefined)){e.preventDefault();toCatalog()}
  if(t.hasAttribute('data-reset')){state.q='';state.u='all';state.cat='';state.grp=null;$('#q').value='';renderFilters();renderGrid();goGrid();return}
@@ -618,7 +632,9 @@ document.addEventListener('click',e=>{
  if(t.dataset.more){showMore(t.dataset.more);return}
  if(t.dataset.add){const id=t.dataset.add;if(!state.cart[id]){state.cart[id]=1;toast('Ajouté au panier')}else{toast('Déjà dans le panier')}save();renderGrid();renderCart();if($('#modal').classList.contains('on'))t.textContent='✓ Dans le panier';return}
  if(t.dataset.inc){const id=t.dataset.inc;if(state.cart[id]<byId[id].units)state.cart[id]++;else toast('Maximum disponible : '+byId[id].units);save();renderCart();return}
- if(t.dataset.dec){const id=t.dataset.dec;if(--state.cart[id]<=0)delete state.cart[id];save();renderCart();renderGrid();return}
+ if(t.dataset.dec){const id=t.dataset.dec;if(--state.cart[id]<=0)delete state.cart[id];if(!Object.keys(state.cart).length){state.out='';state.back=''}save();renderCart();renderGrid();return}
+ if(t.id==='emptyCart'){resetOrder();toast('Panier vidé');return}
+ if(t.hasAttribute('data-sent')){setTimeout(()=>{resetOrder();openModal(mh('Commande envoyée')+`<div class="mb"><p style="font-size:17px">Votre panier a été envoyé à ERA-PROD sur WhatsApp. Ils vous répondent avec la facture.</p><p class="tnote">Votre panier et vos dates ont été remis à zéro pour une nouvelle commande.</p><button class="btn red big" data-close style="width:100%;margin-top:12px">Continuer</button></div>`)},300);return}
  if(t.id==='cartBtn'||t.id==='barBtn'){openCart();return}
  if(t.id==='validate'){chooseMode();return}
  if(t.dataset.mode){t.dataset.mode==='wa'?modeWa():modeForm(t.dataset.mode);return}
