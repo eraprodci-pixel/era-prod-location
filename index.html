@@ -231,6 +231,28 @@ body{background:#fff}
 @media (max-width:900px){.hero{grid-template-columns:1fr}.hero .art{display:none}}
 @media (max-width:720px){.topbar span:nth-child(n+2){display:none}.topbar .wrap{justify-content:center}.hero{padding:34px 18px 34px}.promos{grid-template-columns:1fr}.promo{padding:22px;min-height:150px}.promo h3{font-size:21px}.band{padding:24px 0}.row4{gap:10px}.sh h2{font-size:20px}.trust{grid-template-columns:1fr}.trust div{border-right:0;border-bottom:1px solid var(--line)}}
 
+/* === calendrier === */
+.dpick{width:100%;min-height:52px;border:1.5px solid #cfcfcf;border-radius:10px;background:#fff;padding:10px 12px;text-align:left;font-size:15px;font-weight:600;display:flex;gap:8px;align-items:center;line-height:1.25}
+.dpick em{font-style:normal;color:#888;font-weight:500}
+.dpick:hover,.dpick:focus{border-color:var(--red);outline:none}
+.calov{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.35);display:none;touch-action:none}
+.calov.on{display:block}
+.cal{position:fixed;z-index:96;left:50%;top:50%;transform:translate(-50%,-50%);width:min(360px,calc(100% - 24px));background:#fff;border-radius:18px;padding:14px 14px 16px;display:none;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+.cal.on{display:block}
+.cal .ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.cal .ch b{font-size:17px}
+.cal .cm{display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px}
+.cal .cm b{font-size:16px;text-transform:capitalize}
+.cal .nav{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:24px;line-height:1;font-weight:700}
+.cal .nav:disabled{opacity:.3}
+.cal .cw,.cal .cg{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal .cw span{font-size:12px;color:var(--mut);font-weight:600;padding-bottom:4px}
+.cal .cg button{aspect-ratio:1;border:0;border-radius:10px;background:#f3f4f7;font-size:16px;font-weight:600;min-height:40px}
+.cal .cg button:hover{background:#e5e7ff}
+.cal .cg button:disabled{background:none;color:#c4c4c4;font-weight:400}
+.cal .cg button.tdy{outline:2px solid var(--blue);outline-offset:-2px}
+.cal .cg button.rng{background:#ffe3e5}
+.cal .cg button.sel{background:var(--red);color:#fff}
 /* === v3 : fenêtres stables, filtres en haut, tutoriel intégré === */
 body{overflow-x:clip}
 html.lock,html.lock body{overflow:hidden;overscroll-behavior:none}
@@ -384,6 +406,7 @@ input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width
  <div class="df" id="cartFoot"></div>
 </aside>
 <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+<div class="calov" id="calov"></div><div class="cal" id="cal" role="dialog" aria-modal="true" aria-label="Choisir une date"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -517,7 +540,7 @@ function renderCart(){
  if(!ids.length){$('#cartBody').innerHTML='<p style="color:var(--mut);padding:30px 0;text-align:center">Votre panier est vide.<br>Ajoutez des appareils pour commencer.</p>';$('#cartFoot').innerHTML='';return;}
  $('#cartBody').innerHTML=ids.map(i=>{const it=byId[i];return `<div class="li"><div class="t">${it.img?`<img src="${src(it.id)}" alt="">`:''}</div><div><b>${esc(it.name)}</b><small>${it.price?fmt(it.price)+' / jour':'Prix sur demande'}</small></div>
   <div class="qty"><button data-dec="${i}" aria-label="Moins">−</button><b>${state.cart[i]}</b><button data-inc="${i}" aria-label="Plus">+</button></div></div>`}).join('')+
-  `<div class="two" style="margin-top:6px"><div><label for="dout">Date de sortie</label><input type="date" id="dout" min="${today()}" value="${state.out}"></div><div><label for="dback">Date de retour</label><input type="date" id="dback" value="${state.back}"></div></div>`;
+  `<div class="two" style="margin-top:6px"><div><label>Date de sortie</label><button type="button" class="dpick" data-pick="out">${dLabel(state.out)}</button></div><div><label>Date de retour</label><button type="button" class="dpick" data-pick="back">${dLabel(state.back)}</button></div></div>`;
  const t=totals();
  $('#cartFoot').innerHTML=(t.d===-1?'<div class="note" style="margin:0">La date de retour doit être après la date de sortie.</div>':'')+
   `<div class="tot"><span>${t.d>0?'Total pour '+t.d+' jour'+(t.d>1?'s':''):'Total'}</span><span>${t.known&&t.d>0?fmt(t.perDay*t.d):t.known?fmt(t.perDay)+' / jour':'Sur devis'}</span></div>
@@ -554,6 +577,29 @@ function showTuto(id){const it=byId[id],v=TUTO[id];
 
 /* ---------- validation du panier ---------- */
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
+const MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const JOURS=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const fromIso=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const dLabel=s=>s?`<span>📅</span> ${JOURS[fromIso(s).getDay()]} ${fromIso(s).getDate()} ${MOIS[fromIso(s).getMonth()]} ${fromIso(s).getFullYear()}`:'<span>📅</span> <em>Choisir une date</em>';
+let cal={k:'out',y:0,m:0};
+function calMin(){return cal.k==='back'&&state.out&&state.out>today()?state.out:today()}
+function openCal(k){cal.k=k;const base=fromIso((k==='back'?state.back||state.out:state.out)||today());cal.y=base.getFullYear();cal.m=base.getMonth();drawCal();$('#calov').classList.add('on');$('#cal').classList.add('on')}
+function closeCal(){$('#calov').classList.remove('on');$('#cal').classList.remove('on')}
+function drawCal(){const d0=new Date(cal.y,cal.m,1);cal.y=d0.getFullYear();cal.m=d0.getMonth();
+ const min=calMin(),sel=cal.k==='out'?state.out:state.back,firstMonth=fromIso(today());
+ const canPrev=cal.y>firstMonth.getFullYear()||(cal.y===firstMonth.getFullYear()&&cal.m>firstMonth.getMonth());
+ const lead=(d0.getDay()+6)%7,n=new Date(cal.y,cal.m+1,0).getDate();let cells='';
+ for(let i=0;i<lead;i++)cells+='<span></span>';
+ for(let d=1;d<=n;d++){const s=iso(new Date(cal.y,cal.m,d));const off=s<min;const inr=state.out&&state.back&&s>=state.out&&s<=state.back;
+  cells+=`<button type="button" class="${s===sel?'sel':''}${inr?' rng':''}${s===today()?' tdy':''}" ${off?'disabled':`data-day="${s}"`}>${d}</button>`}
+ $('#cal').innerHTML=`<div class="ch"><b>${cal.k==='out'?'Date de sortie':'Date de retour'}</b><button type="button" class="x" id="calx" aria-label="Fermer">×</button></div>
+ <div class="cm"><button type="button" class="nav" data-mon="-1" ${canPrev?'':'disabled'} aria-label="Mois précédent">‹</button><b>${MOIS[cal.m]} ${cal.y}</b><button type="button" class="nav" data-mon="1" aria-label="Mois suivant">›</button></div>
+ <div class="cw"><span>lun</span><span>mar</span><span>mer</span><span>jeu</span><span>ven</span><span>sam</span><span>dim</span></div><div class="cg">${cells}</div>
+ <p class="tnote" style="text-align:center;margin:8px 0 0">${cal.k==='back'&&state.out?'Sortie le '+fromIso(state.out).getDate()+' '+MOIS[fromIso(state.out).getMonth()]+' · touchez le jour du retour':'Touchez un jour pour le choisir'}</p>`}
+function refreshDates(){document.querySelectorAll('[data-pick]').forEach(b=>b.innerHTML=dLabel(b.dataset.pick==='out'?state.out:state.back));if($('#drawer').classList.contains('on'))renderCart()}
+function pickDay(s){if(cal.k==='out'){state.out=s;if(state.back&&state.back<s)state.back=''}else state.back=s;save();closeCal();refreshDates();
+ if(cal.k==='out'&&!state.back)setTimeout(()=>openCal('back'),180)}
 function resetOrder(){state.cart={};state.out='';state.back='';save();renderCart();renderGrid()}
 function cartLines(){return Object.keys(state.cart).map(i=>`• ${state.cart[i]} × ${byId[i].name} (N° ${i})`).join('\n')}
 function waLink(text){return `https://wa.me/${WA}?text=${encodeURIComponent(text)}`}
@@ -574,7 +620,7 @@ function modeForm(mode){form.mode=mode;form.idImg='';form.faceImg='';
  openModal(mh(liv?'Me faire livrer':'Réserver pour une date')+`<form class="mb" id="rf">
   <div class="two"><div><label for="fn">Nom</label><input id="fn" type="text" required autocomplete="family-name"></div><div><label for="fp">Prénoms</label><input id="fp" type="text" required autocomplete="given-name"></div></div>
   <label for="ft">Numéro de téléphone</label><input id="ft" type="tel" required inputmode="tel" placeholder="07 00 00 00 00" autocomplete="tel">
-  <div class="two"><div><label for="fo">Date de sortie</label><input id="fo" type="date" required min="${today()}" value="${state.out}"></div><div><label for="fb">Date de retour</label><input id="fb" type="date" required min="${today()}" value="${state.back}"></div></div>
+  <div class="two"><div><label>Date de sortie</label><button type="button" class="dpick" data-pick="out">${dLabel(state.out)}</button></div><div><label>Date de retour</label><button type="button" class="dpick" data-pick="back">${dLabel(state.back)}</button></div></div>
   ${liv?`<label for="fa">Adresse de livraison (commune, quartier, repère)</label><textarea id="fa" rows="2" required></textarea>
   <div class="two" style="margin-top:12px"><div class="up"><b>📄 Photo de votre pièce d'identité</b><input type="file" accept="image/*" capture="environment" id="fid" required><div id="pid"></div></div>
   <div class="up"><b>🙂 Photo de votre visage</b><input type="file" accept="image/*" capture="user" id="fface" required><div id="pface"></div></div></div>
@@ -620,13 +666,17 @@ function makeContract(f){
 
 /* ---------- événements ---------- */
 document.addEventListener('click',e=>{
- const t=e.target.closest('[data-sent],#emptyCart,[data-tuto],[data-back],[data-reset],[data-g],[data-u],[data-more],[data-add],[data-inc],[data-dec],[data-close],[data-mode],[data-s],#cartBtn,#barBtn,#validate,#ov,#printC,#copyC');
+ const t=e.target.closest('[data-pick],[data-day],[data-mon],#calov,#calx,[data-sent],#emptyCart,[data-tuto],[data-back],[data-reset],[data-g],[data-u],[data-more],[data-add],[data-inc],[data-dec],[data-close],[data-mode],[data-s],#cartBtn,#barBtn,#validate,#ov,#printC,#copyC');
  if(!t)return;
  if(t.tagName==='A'&&(t.dataset.u||t.dataset.g!==undefined)){e.preventDefault();toCatalog()}
  if(t.hasAttribute('data-reset')){state.q='';state.u='all';state.cat='';state.grp=null;$('#q').value='';renderFilters();renderGrid();goGrid();return}
  if(t.dataset.g!==undefined){const g=GROUPS.find(x=>x[2]===t.dataset.g);state.grp=g?{label:g[0],cats:g[2].split(',')}:null;state.u='all';state.cat='';state.q='';$('#q').value='';renderFilters();renderGrid();goGrid();return}
  if(t.dataset.u){state.u=t.dataset.u;state.cat='';state.grp=null;state.q='';$('#q').value='';renderFilters();renderGrid();goGrid();return}
  if(t.dataset.s){$('#q').value=t.dataset.s;state.q=t.dataset.s;state.grp=null;state.u='all';state.cat='';renderFilters();renderGrid();goGrid();return}
+ if(t.dataset.pick){openCal(t.dataset.pick);return}
+ if(t.dataset.mon){cal.m+=+t.dataset.mon;drawCal();return}
+ if(t.dataset.day){pickDay(t.dataset.day);return}
+ if(t.id==='calov'||t.id==='calx'){closeCal();return}
  if(t.dataset.tuto){showTuto(t.dataset.tuto);return}
  if(t.dataset.back){showMore(t.dataset.back);return}
  if(t.dataset.more){showMore(t.dataset.more);return}
@@ -653,13 +703,13 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('submit',e=>{e.preventDefault();
  if(e.target.id==='sf'){state.q=$('#q').value;state.grp=null;state.u='all';state.cat='';renderFilters();renderGrid();$('#q').blur();if(state.q)goGrid();return}
- if(e.target.id==='rf'){state.out=$('#fo').value;state.back=$('#fb').value;save();
+ if(e.target.id==='rf'){if(!state.out||!state.back){toast('Choisissez la date de sortie et la date de retour');openCal(state.out?'back':'out');return}save();
   if(days()<1){toast('Vérifiez vos dates');return}
   if(form.mode==='liv'&&(!form.idImg||!form.faceImg)){toast('Ajoutez votre pièce et votre photo');return}
   makeContract({mode:form.mode,nom:$('#fn').value.trim(),prenoms:$('#fp').value.trim(),tel:$('#ft').value.trim(),adresse:$('#fa')?$('#fa').value.trim():'',idImg:form.idImg,faceImg:form.faceImg});}
 });
 let ti;$('#q').addEventListener('input',e=>{clearTimeout(ti);ti=setTimeout(()=>{state.q=e.target.value;state.grp=null;state.u='all';state.cat='';renderFilters();renderGrid()},220)});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAll()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#cal').classList.contains('on'))closeCal();else closeAll()}});
 function cwa(){$('#cwa').href=waLink(`Bonjour ERA-PROD, je suis ${$('#cn').value||'…'}.\n${$('#cm').value}`)}
 $('#cf').addEventListener('input',cwa);
 function showPage(p){document.querySelectorAll('.page').forEach(s=>s.classList.toggle('on',s.id==='p-'+p));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.p===p))}
